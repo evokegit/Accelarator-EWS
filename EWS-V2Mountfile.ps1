@@ -5,32 +5,49 @@ param (
     [string]$ResourceGroupName,
     [string]$FileShareName,
     [string]$ImageUrl
-   
 )
 
-$ApiUrl="https://"+$ApiUrl+".azurewebsites.net/api"
-$ApiUrl
-# Set the JSON object with the API URL
+# Validate parameters
+if (-not $ApiUrl -or -not $StorageAccountName -or -not $StorageAccountKey -or -not $FileShareName -or -not $ImageUrl) {
+    Write-Error "One or more required parameters are missing."
+    exit 1
+}
+
+# Construct the API URL
+$ApiUrl = "https://$ApiUrl.azurewebsites.net/api"
+Write-Output "API_URL: $ApiUrl"
+
+# Create JSON object and convert to string
 $jsonObject = @{
-    "API_URL" = $ApiUrl,
+    "API_URL" = $ApiUrl
     "ImageUrl" = $ImageUrl
 }
 
 # Convert the JSON object to a string
 $jsonString = $jsonObject | ConvertTo-Json
 
-# Write the JSON string to a file
-$jsonString | Out-File -FilePath appConfig.json
+# Write JSON to file
+$jsonFilePath = "appConfig.json"
+$jsonString | Out-File -FilePath $jsonFilePath
+Write-Output "JSON configuration written to $jsonFilePath"
 
-# Create the storage context
-$storageContext = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $StorageAccountKey
+# Create Azure Storage context
+try {
+    $storageContext = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $StorageAccountKey
+} catch {
+    Write-Error "Failed to create Azure Storage context: $_"
+    exit 1
+}
 
-# Upload the file to the file share
-Set-AzStorageFileContent -Context $storageContext -ShareName $FileShareName -Source appConfig.json -Path appConfig.json
+# Upload JSON to Azure File Share
+try {
+    Set-AzStorageFileContent -Context $storageContext -ShareName $FileShareName -Source $jsonFilePath -Path $jsonFilePath
+    Write-Output "File successfully uploaded to Azure File Share: $FileShareName"
+} catch {
+    Write-Error "Failed to upload file to Azure File Share: $_"
+    exit 1
+}
 
-
-
-
-
-#$storagePath = New-AzWebAppAzureStoragePath -Name "mount" -AccountName $StorageAccountName -Type AzureFiles -ShareName $FileShareName -AccessKey $StorageAccountKey -MountPath "/usr/share/nginx/html/assets"
-#Set-AzWebApp -ResourceGroupName $ResourceGroupName -Name $Appname -AzureStoragePath $storagePath -Verbose 
+# Uncomment and adjust if needed for Azure Web App configuration
+# $storagePath = New-AzWebAppAzureStoragePath -Name "mount" -AccountName $StorageAccountName -Type AzureFiles -ShareName $FileShareName -AccessKey $StorageAccountKey -MountPath "/usr/share/nginx/html/assets"
+# Set-AzWebApp -ResourceGroupName $ResourceGroupName -Name $Appname -AzureStoragePath $storagePath -Verbose
